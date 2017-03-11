@@ -2,37 +2,40 @@
  * @file mouse-time-display.js
  */
 import Component from '../../component.js';
-import * as Dom from '../../utils/dom.js';
 import * as Fn from '../../utils/fn.js';
 import formatTime from '../../utils/format-time.js';
-import throttle from 'lodash-compat/function/throttle';
+
+import './time-tooltip';
 
 /**
- * The Mouse Time Display component shows the time you will seek to
- * when hovering over the progress bar
+ * The {@link MouseTimeDisplay} component tracks mouse movement over the
+ * {@link ProgressControl}. It displays an indicator and a {@link TimeTooltip}
+ * indicating the time which is represented by a given point in the
+ * {@link ProgressControl}.
  *
- * @param {Player|Object} player
- * @param {Object=} options
  * @extends Component
- * @class MouseTimeDisplay
  */
 class MouseTimeDisplay extends Component {
 
+  /**
+   * Creates an instance of this class.
+   *
+   * @param {Player} player
+   *        The {@link Player} that this class should be attached to.
+   *
+   * @param {Object} [options]
+   *        The key/value store of player options.
+   */
   constructor(player, options) {
     super(player, options);
-
-    this.update(0, 0);
-
-    player.on('ready', () => {
-      this.on(player.controlBar.progressControl.el(), 'mousemove', throttle(Fn.bind(this, this.handleMouseMove), 25));
-    });
+    this.update = Fn.throttle(Fn.bind(this, this.update), 25);
   }
 
   /**
-   * Create the component's DOM element
+   * Create the DOM element for this class.
    *
    * @return {Element}
-   * @method createEl
+   *         The element that was created.
    */
   createEl() {
     return super.createEl('div', {
@@ -40,25 +43,45 @@ class MouseTimeDisplay extends Component {
     });
   }
 
-  handleMouseMove(event) {
-    let duration = this.player_.duration();
-    let newTime = this.calculateDistance(event) * duration;
-    let position = event.pageX - Dom.findElPosition(this.el().parentNode).left;
+  /**
+   * Enqueues updates to its own DOM as well as the DOM of its
+   * {@link TimeTooltip} child.
+   *
+   * @param {Object} seekBarRect
+   *        The `ClientRect` for the {@link SeekBar} element.
+   *
+   * @param {number} seekBarPoint
+   *        A number from 0 to 1, representing a horizontal reference point
+   *        from the left edge of the {@link SeekBar}
+   */
+  update(seekBarRect, seekBarPoint) {
 
-    this.update(newTime, position);
-  }
+    // If there is an existing rAF ID, cancel it so we don't over-queue.
+    if (this.rafId_) {
+      this.cancelAnimationFrame(this.rafId_);
+    }
 
-  update(newTime, position) {
-    let time = formatTime(newTime, this.player_.duration());
+    this.rafId_ = this.requestAnimationFrame(() => {
+      const duration = this.player_.duration();
+      const content = formatTime(seekBarPoint * duration, duration);
 
-    this.el().style.left = position + 'px';
-    this.el().setAttribute('data-current-time', time);
-  }
-
-  calculateDistance(event) {
-    return Dom.getPointerPosition(this.el().parentNode, event).x;
+      this.el_.style.left = `${seekBarRect.width * seekBarPoint}px`;
+      this.getChild('timeTooltip').update(seekBarRect, seekBarPoint, content);
+    });
   }
 }
+
+/**
+ * Default options for `MouseTimeDisplay`
+ *
+ * @type {Object}
+ * @private
+ */
+MouseTimeDisplay.prototype.options_ = {
+  children: [
+    'timeTooltip'
+  ]
+};
 
 Component.registerComponent('MouseTimeDisplay', MouseTimeDisplay);
 export default MouseTimeDisplay;

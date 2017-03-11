@@ -10,33 +10,36 @@ import document from 'global/document';
 /**
  * The specific menu item type for selecting a language within a text track kind
  *
- * @param {Player|Object} player
- * @param {Object=} options
  * @extends MenuItem
- * @class TextTrackMenuItem
  */
 class TextTrackMenuItem extends MenuItem {
 
-  constructor(player, options){
-    let track = options['track'];
-    let tracks = player.textTracks();
+  /**
+   * Creates an instance of this class.
+   *
+   * @param {Player} player
+   *        The `Player` that this class should be attached to.
+   *
+   * @param {Object} [options]
+   *        The key/value store of player options.
+   */
+  constructor(player, options) {
+    const track = options.track;
+    const tracks = player.textTracks();
 
     // Modify options for parent MenuItem class's init.
-    options['label'] = track['label'] || track['language'] || 'Unknown';
-    options['selected'] = track['default'] || track['mode'] === 'showing';
+    options.label = track.label || track.language || 'Unknown';
+    options.selected = track.default || track.mode === 'showing';
 
     super(player, options);
 
     this.track = track;
+    const changeHandler = Fn.bind(this, this.handleTracksChange);
 
-    if (tracks) {
-      let changeHandler = Fn.bind(this, this.handleTracksChange);
-
-      tracks.addEventListener('change', changeHandler);
-      this.on('dispose', function() {
-        tracks.removeEventListener('change', changeHandler);
-      });
-    }
+    tracks.addEventListener('change', changeHandler);
+    this.on('dispose', function() {
+      tracks.removeEventListener('change', changeHandler);
+    });
 
     // iOS7 doesn't dispatch change events to TextTrackLists when an
     // associated track's mode changes. Without something like
@@ -44,7 +47,7 @@ class TextTrackMenuItem extends MenuItem {
     // possible to detect changes to the mode attribute and polyfill
     // the change event. As a poor substitute, we manually dispatch
     // change events whenever the controls modify the mode.
-    if (tracks && tracks.onchange === undefined) {
+    if (tracks.onchange === undefined) {
       let event;
 
       this.on(['tap', 'click'], function() {
@@ -52,7 +55,9 @@ class TextTrackMenuItem extends MenuItem {
           // Android 2.3 throws an Illegal Constructor error for window.Event
           try {
             event = new window.Event('change');
-          } catch(err){}
+          } catch (err) {
+            // continue regardless of error
+          }
         }
 
         if (!event) {
@@ -66,40 +71,52 @@ class TextTrackMenuItem extends MenuItem {
   }
 
   /**
-   * Handle click on text track
+   * This gets called when an `TextTrackMenuItem` is "clicked". See
+   * {@link ClickableComponent} for more detailed information on what a click can be.
    *
-   * @method handleClick
+   * @param {EventTarget~Event} event
+   *        The `keydown`, `tap`, or `click` event that caused this function to be
+   *        called.
+   *
+   * @listens tap
+   * @listens click
    */
   handleClick(event) {
-    let kind = this.track['kind'];
-    let tracks = this.player_.textTracks();
+    const kind = this.track.kind;
+    let kinds = this.track.kinds;
+    const tracks = this.player_.textTracks();
+
+    if (!kinds) {
+      kinds = [kind];
+    }
 
     super.handleClick(event);
 
-    if (!tracks) return;
+    if (!tracks) {
+      return;
+    }
 
     for (let i = 0; i < tracks.length; i++) {
-      let track = tracks[i];
+      const track = tracks[i];
 
-      if (track['kind'] !== kind) {
-        continue;
-      }
-
-      if (track === this.track) {
-        track['mode'] = 'showing';
+      if (track === this.track && (kinds.indexOf(track.kind) > -1)) {
+        track.mode = 'showing';
       } else {
-        track['mode'] = 'disabled';
+        track.mode = 'disabled';
       }
     }
   }
 
   /**
-   * Handle text track change
+   * Handle text track list change
    *
-   * @method handleTracksChange
+   * @param {EventTarget~Event} event
+   *        The `change` event that caused this function to be called.
+   *
+   * @listens TextTrackList#change
    */
-  handleTracksChange(event){
-    this.selected(this.track['mode'] === 'showing');
+  handleTracksChange(event) {
+    this.selected(this.track.mode === 'showing');
   }
 
 }
